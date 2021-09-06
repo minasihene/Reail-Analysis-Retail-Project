@@ -1,0 +1,135 @@
+Create or Alter proc Dates (@StartYear int, @EndYear int)
+as
+Begin
+--Declare @StartYear Int = 2018
+--Declare @EndYear Int = 2023
+Declare @StartMonth Int 
+Declare @EndMonth Int = 12
+Declare @StartDay Int
+Declare @EndDay Int
+Declare @DateKey Int
+Declare @Date Date
+Declare @MonthName Nvarchar (20)
+Declare @DayName Nvarchar (20)
+Declare @WeekDayNumber Int 
+Declare @WeekofYear Int 
+Declare @DayofYear Int 
+Declare @Quarter Nvarchar (20)
+
+BEGIN
+SET NOCOUNT ON
+While @StartYear <= @EndYear
+	Begin
+		Select @StartMonth = 1
+		While @StartMonth <= @EndMonth
+		Begin
+			Select @StartDay = 1
+			Select @EndDay =  DAY(EOMONTH(DATEFROMPARTS(@StartYear, @StartMonth, @StartDay)))
+			While @StartDay <= @EndDay
+			Begin
+			Select @DateKey = CAST(CONCAT(@StartYear, RIGHT('0'+ CAST(@StartMonth AS varchar),2), RIGHT('0'+ CAST(@StartDay AS varchar),2)) AS Int)
+			Select @Date = DATEFROMPARTS(@StartYear, @StartMonth, @StartDay)
+			Select @MonthName = DATENAME(MONTH, @Date)
+			Select @DayName = DATENAME(WEEKDAY,@Date)
+			Select @WeekDayNumber = DATEPART(WEEKDAY, @Date) --1-7
+			Select @WeekofYear = DATEPART(WEEK, @Date) --52weeks
+			Select @DayofYear = DATEPART(DAYOFYEAR, @Date) --365
+			Select @Quarter = 'Q' + CAST(DATEPART(QUARTER, @Date) AS VARCHAR)
+INSERT INTO MegaEDW.DimDate (DateKey, ActualDate, CalendarYear, [Month], [MonthName], [Day], [DayName], WeekDayNumber, [DayofYear], WeekofYear, [Quarter])
+SELECT						@DateKey, @Date, @StartYear, @StartMonth, @MonthName, @StartDay, @DayName, @WeekDayNumber, @DayofYear, @WeekofYear, @Quarter
+/*
+PRINT CAST(@Startyear as varchar) + ' - ' +  CAST(@StartMonth as varchar) + ' - ' + CAST(@StartDay as varchar) + ' - ' + CAST(@Datekey as varchar)
++ ' - ' + CAST(@Date as varchar)+ ' - ' + CAST(@DayName as varchar)+ ' - ' + CAST(@MonthName as varchar) + ' - ' + CAST(@WeekDayNumber as varchar)
++ ' - ' + CAST(@WeekofYear as varchar)+ ' - ' + CAST(@DayofYear as varchar)+ ' - ' + CAST(@Quarter as varchar) */
+			Select @StartDay = @StartDay + 1
+			End
+		Select @StartMonth = @StartMonth + 1
+		End
+	Select @StartYear = @StartYear + 1
+	End
+
+END
+end
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/* TRUNCATE TABLE [Grocery_EDW].[DimDate]
+SELECT * FROM [Grocery_EDW].[DimDate] */
+
+DECLARE @STARTYEAR INT = 2012
+DECLARE @ENDYEAR INT = 2025
+DECLARE @STARTMONTH INT
+DECLARE @ENDMONTH INT = 12
+DECLARE @STARTDAY INT 
+DECLARE @ENDDATE INT
+DECLARE @DATEKEY INT
+DECLARE @DATE DATE
+DECLARE @MONTHNAME NVARCHAR (50)
+DECLARE @DAYNAME NVARCHAR (50)
+DECLARE @WEEKDAYNUMBER INT  -- 1-7
+DECLARE @WEEKOFYEAR INT --52 weeks
+DECLARE @DAYOFYEAR INT -- 1-365
+DECLARE @QUARTER NVARCHAR (50)
+DECLARE @FRENCHDAYNAME NVARCHAR (50)
+DECLARE @FRENCHMONTHNAME NVARCHAR (50)
+WHILE @STARTYEAR <= @ENDYEAR
+BEGIN
+SET NOCOUNT ON
+	SELECT @STARTMONTH = 1
+	WHILE @STARTMONTH <=@ENDMONTH
+	BEGIN
+		SELECT @STARTDAY =1
+		SELECT @ENDDATE = DAY(EOMONTH(DATEFROMPARTS(@STARTYEAR, @STARTMONTH, @STARTDAY)))
+		WHILE @STARTDAY <= @ENDDATE
+		BEGIN
+		SELECT @DATEKEY = CONCAT(@STARTYEAR, RIGHT(('0' + CAST(@STARTMONTH AS VARCHAR)),2), RIGHT(('0' + CAST(@STARTDAY AS VARCHAR)),2))
+		SELECT @DATE = DATEFROMPARTS(@STARTYEAR, @STARTMONTH, @STARTDAY)
+		SELECT @MONTHNAME = DATENAME(MONTH, @DATE)
+		SELECT @DAYNAME = DATENAME(WEEKDAY, @DATE)
+		SELECT @WEEKDAYNUMBER = DATEPART(WEEKDAY, @DATE)
+		SELECT @WEEKOFYEAR = DATEPART(WEEK, @DATE)
+		SELECT @DayOFYEAR = DATEPART(DAYOFYEAR, @DATE)
+		SELECT @QUARTER = 'Q' + CAST(DATEPART(QUARTER,@DATE) AS VARCHAR)
+		SELECT @FRENCHDAYNAME = 
+		CASE		WHEN @WEEKDAYNUMBER = 1 THEN 'Dimanche'
+					WHEN @WEEKDAYNUMBER = 2 THEN 'Lundi'
+					WHEN @WEEKDAYNUMBER = 3 THEN 'Mardi'
+					WHEN @WEEKDAYNUMBER = 4 THEN 'Mercredi'
+					WHEN @WEEKDAYNUMBER = 5 THEN 'Jeudi'
+					WHEN @WEEKDAYNUMBER = 6 THEN 'Vendredi'
+					WHEN @WEEKDAYNUMBER = 7 THEN 'Samedi'
+					END
+		SELECT @FRENCHMONTHNAME = 
+		CASE		WHEN MONTH(@DATE) = 1 THEN 'Janvier'
+					WHEN MONTH(@DATE) = 2 THEN 'Février'
+					WHEN MONTH(@DATE) = 3 THEN 'Mars'
+					WHEN MONTH(@DATE) = 4 THEN 'Avril'
+					WHEN MONTH(@DATE) = 5 THEN 'Mai'
+					WHEN MONTH(@DATE) = 6 THEN 'Juin'
+					WHEN MONTH(@DATE) = 7 THEN 'Juillet'
+					WHEN MONTH(@DATE) = 8 THEN 'Août'
+					WHEN MONTH(@DATE) = 9 THEN 'Septembre'
+					WHEN MONTH(@DATE) = 10 THEN 'Octobre'
+					WHEN MONTH(@DATE) = 11 THEN 'Novembre'
+					WHEN MONTH(@DATE) = 12 THEN 'Décembre'
+					END
+
+		INSERT INTO [Grocery_EDW].[DimDate] ([DateKey], [Date], [Day], [Month], [Year], [DayofWeekName], [EnglishMonthName], 
+											 [Quarter], [DayNumberofWeek], 	[DayNumberofYear], [WeekofYear], [FrenchDayofWeekName], [FrenchMonthname])
+		SELECT @DATEKEY, @DATE, @STARTDAY, @STARTMONTH, @STARTYEAR, @DAYNAME, @MONTHNAME, @QUARTER, @WEEKDAYNUMBER, @DAYOFYEAR, @WEEKOFYEAR, @FRENCHDAYNAME, @FRENCHMONTHNAME
+
+	/*	PRINT cast(@STARTYEAR as varchar) + ' -- '+ cast(@startmonth as varchar)+ ' -- '+ cast(@startday as varchar)
+		+ ' -- '+ cast(@datekey as varchar)+ ' -- '+ cast(@date as varchar) + ' -- '+ cast(@monthName as varchar)
+		+ ' -- '+ cast(@DayName as varchar)+ ' -- '+ cast(@Weekdaynumber as varchar)+ ' -- '+ cast(@Weekofyear as varchar)
+		+ ' -- '+ cast(@Dayofyear as varchar)+ ' -- '+ cast(@Quarter as varchar)+ ' -- '+ cast(@FrenchDayName as varchar)
+	*/	
+		SELECT @STARTDAY = @STARTDAY + 1
+		
+		
+		END
+	SELECT @STARTMONTH = @STARTMONTH + 1
+	END
+SELECT @STARTYEAR = @STARTYEAR + 1
+END

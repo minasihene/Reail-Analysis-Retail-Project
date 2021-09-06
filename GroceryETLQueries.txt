@@ -1,0 +1,1365 @@
+  --ETL OF STORE TABLE
+  --Execute SQL Task :
+ /*IF OBJECT_ID('Grocery_OLTP.Store') IS NOT NULL 
+ Truncate Table Grocery_OLTP.Store */
+
+ --Use Execute SQL Task (SSIS) to count OLTP data to be migrated to staging
+ 
+ --Script to Count Source Data to Staging below:
+
+  USE [Grocery Store OLTP] --Source 
+  SELECT Count (*) as OLTPCount
+  FROM [Grocery Store OLTP].[dbo].[Store] S
+  INNER JOIN STATE ST ON S.StateID = ST.StateID
+  INNER JOIN City C ON C.CityID = S.CityID;
+
+ --Script to Load Source Data to Staging --OLEDB Source
+USE [Grocery Store OLTP] --Source 
+SELECT S.[StoreID]
+      ,S.[StoreName]
+      ,S.[StreetAddress]
+      ,C.[CityName] 
+      ,[State]
+  FROM [Grocery Store OLTP].[dbo].[Store] S
+  INNER JOIN STATE ST ON S.StateID = ST.StateID
+  INNER JOIN City C ON C.CityID = S.CityID;
+
+  --OLTP Script to Update Package Table and Insert Into Metrics Table
+  Use [Grocery Control]
+
+  DECLARE @PackageID Int =?
+  DECLARE @OLTPCount Int =?
+  DECLARE @StageCount Int =?
+
+  Update Control.Package Set LastRun = Getdate() where PackageID = @PackageID
+
+  Insert into Control.Metrics (PackageID, OLTPCount, StageCount, RunDate)
+  Select @PackageID, @OLTPCount, @StageCount, Getdate()
+  
+
+  --Script to Create Schemas and Table for Staging --OLEDB Destination
+USE [Grocery Staging] 
+--CREATE SCHEMA Grocery_OLTP 
+--CREATE SCHEMA HR 
+--CREATE SCHEMA Sales 
+--CREATE SCHEMA Purchase 
+
+
+Create Table Grocery_OLTP.Store
+(
+StoreID INT,
+StoreName nvarchar(50),
+StreetAddress nvarchar (50),
+CityName nvarchar (50),
+[State] nvarchar (50)
+Constraint PK_Grocery_OLTP_StoreID Primary key (StoreID)
+)
+
+--Alter Table Grocery_OLTP.Store add LoadDate Datetime
+
+------------------------EDW STORE------------------------------
+
+--Script to Count data From Staging to EDW
+USE [Grocery Staging]
+
+SELECT Count(*) as CurrentCount from Grocery_OLTP.Store
+
+--Count DATA IN EDW BEFORE LOADING WAREHOUSE --PRECOUNT
+Use [Grocery EDW] 
+SELECT Count(*) as PreCount from [Grocery_EDW].[DimStore]
+
+--Count DATA IN EDW AFTER LOADING WAREHOUSE --POSTCOUNT
+Use [Grocery EDW] 
+SELECT Count(*) as PostCount from [Grocery_EDW].[DimStore]
+
+--Script to Load data From Staging to EDW
+USE [Grocery Staging]
+
+SELECT [StoreID],
+      [StoreName],
+      [StreetAddress],
+      [CityName] ,
+      [State]
+from Grocery_OLTP.Store
+
+	  --Script to create Schemas
+USE [Grocery EDW] --EDW
+--CREATE SCHEMA Grocery_EDW 
+--CREATE SCHEMA HR 
+--CREATE SCHEMA Sales 
+--CREATE SCHEMA Purchase 
+
+
+Create Table Grocery_EDW.DimStore
+(
+Store_sk INT IDENTITY (1,1),
+StoreID INT,
+StoreName nvarchar(50),
+StreetAddress nvarchar (50),
+CityName nvarchar (50),
+[State] nvarchar (50),
+[Effective Start Date] Datetime,
+Constraint PK_Grocery_EDW_Store_sk Primary key (Store_sk)
+)
+
+
+--EDW Script to Update Package Table and Insert Into Metrics Table
+  Use [Grocery Control]
+
+  DECLARE @PackageID Int =?
+  DECLARE @PreCount Int =?
+  DECLARE @CurrentCount Int =?
+  DECLARE @PostCount Int =?
+  DECLARE @Type1Count Int =?
+  DECLARE @Type2Count Int =?
+
+  Update Control.Package Set LastRun = Getdate() where PackageID = @PackageID
+
+  Insert into Control.Metrics (PackageID, PreCount, CurrentCount, PostCount, Type1Count, Type2Count, RunDate)
+  Select @PackageID, @PreCount, @CurrentCount, @PostCount, @Type1Count, @Type2Count, Getdate()
+
+---------------------------------------------------------------------------------------********************
+---------------------------------------------------------------------------------------********************
+
+--ETL OF PRODUCT OLTP TABLE TO STAGING
+
+USE [Grocery Staging] --Staging 
+
+Create Table Grocery_OLTP.Product
+(
+[ProductID] INT,
+[Product] nvarchar(50),
+[ProductNumber] nvarchar (50),
+[UnitPrice] float,
+[DepartmentName] nvarchar (50)
+Constraint PK_Grocery_OLTP_ProductID Primary key (ProductID)
+)
+
+
+--Script to Load Source Data to Staging
+USE [Grocery Store OLTP] --Source 
+
+SELECT P.[ProductID]
+      ,P.[Product]
+      ,P.[ProductNumber]
+      ,P.[UnitPrice]
+	  ,D.[Department]
+  FROM [dbo].[Product] P
+  INNER JOIN DEPARTMENT D ON P.DepartmentID= D.DepartmentID
+
+--Script to Count Source Data 
+USE [Grocery Store OLTP] 
+
+SELECT Count (*) as OLTPCount
+  FROM [dbo].[Product] P
+  INNER JOIN DEPARTMENT D ON P.DepartmentID= D.DepartmentID
+
+
+--Script to Update Package Table and Insert Into Metrics Table
+  Use [Grocery Control]
+
+  DECLARE @PackageID Int =?
+  DECLARE @OLTPCount Int =?
+  DECLARE @StageCount Int =?
+
+  Update Control.Package Set LastRun = Getdate() where PackageID = @PackageID
+
+  Insert into Control.Metrics (PackageID, OLTPCount, StageCount, RunDate)
+  Select @PackageID, @OLTPCount, @StageCount, Getdate()
+
+
+
+  ------------------------PRODUCT EDW ------------------------------
+ 
+ --Script to create EDW Table
+USE [Grocery EDW] --EDW
+
+Create Table table Grocery_EDW.DimProduct
+(
+Product_sk INT IDENTITY (1,1),
+ProductID INT,
+[Product] nvarchar(50),
+[ProductNumber] nvarchar (50),
+[UnitPrice] float,
+[DepartmentName] nvarchar (50),
+[Effective Start Date] Datetime,
+[Effective End Date] Datetime
+Constraint PK_Grocery_EDW_Product_sk Primary key (Product_sk)
+)
+ 
+ --Scripts to Load PRODUCT EDW
+
+  USE [Grocery Staging]
+
+SELECT [ProductID],
+      [Product],
+      [ProductNumber],
+	  [DepartmentName],
+      [UnitPrice] 
+FROM Grocery_OLTP.Product
+
+
+--Script to Count data From Staging to EDW
+USE [Grocery Staging]
+SELECT Count(*) as CurrentCount FROM Grocery_OLTP.Product
+
+Use [Grocery EDW] 
+--Count DATA IN EDW BEFORE LOADING WAREHOUSE --PRECOUNT
+SELECT Count(*) as PreCount from [Grocery_EDW].[DimProduct]
+
+--Count DATA IN EDW AFTER LOADING WAREHOUSE --POSTCOUNT
+SELECT Count(*) as PostCount from [Grocery_EDW].[DimProduct]
+
+
+--EDW Script to Update Package Table and Insert Into Metrics Table
+  Use [Grocery Control]
+
+  DECLARE @PackageID Int =?
+  DECLARE @PreCount Int =?
+  DECLARE @CurrentCount Int =?
+  DECLARE @PostCount Int =?
+  DECLARE @Type1Count Int =?
+  DECLARE @Type2Count Int =?
+
+  Update Control.Package Set LastRun = Getdate() where PackageID = @PackageID
+
+  Insert into Control.Metrics (PackageID, PreCount, CurrentCount, PostCount, Type1Count, Type2Count, RunDate)
+  Select @PackageID, @PreCount, @CurrentCount, @PostCount, @Type1Count, @Type2Count, Getdate()
+
+
+---------------------------------------------------------------------------------------********************
+---------------------------------------------------------------------------------------********************
+--ETL OF PROMOTION TABLE
+--Script to Load Source Data to Staging
+use [Grocery Store OLTP] --source
+
+SELECT P.[PromotionID], PT.[Promotion], P.[StartDate], P.[EndDate], P.[DiscountPercent]
+FROM Promotion P INNER JOIN PromotionType PT
+ON P.PromotionTypeID = PT.PromotionTypeID
+
+--Script to Count Source Data 
+use [Grocery Store OLTP] --source
+
+SELECT count (*) as OLTPCount
+FROM Promotion P INNER JOIN PromotionType PT
+ON P.PromotionTypeID = PT.PromotionTypeID
+
+USE [Grocery Staging]
+
+/*IF Object_ID ('Grocery_OLTP.Promotion') IS NOT NULL
+Truncate table Grocery_OLTP.Promotion */
+
+Create Table Grocery_OLTP.Promotion
+(
+[PromotionID] INT,
+[Promotion] nvarchar(50),
+[Effective Start Date] Datetime,
+[Effective End Date] Datetime,
+DiscountPercent float,
+Constraint PK_Grocery_OLTP_PromotionID Primary key (PromotionID)
+)
+
+  -- Staging Script to Update Package Table and Insert Into Metrics Table
+  Use [Grocery Control]
+
+  DECLARE @PackageID Int =?
+  DECLARE @OLTPCount Int =?
+  DECLARE @StageCount Int =?
+
+  Update Control.Package Set LastRun = Getdate() where PackageID = @PackageID
+
+  Insert into Control.Metrics (PackageID, OLTPCount, StageCount, RunDate)
+  Select @PackageID, @OLTPCount, @StageCount, Getdate()
+
+-----Scripts to Load PROMOTION EDW
+
+use [Grocery EDW]
+
+create table Grocery_EDW.DimPromotion
+(
+Promotion_sk int identity (1,1),
+[PromotionID] INT,
+[Promotion] nvarchar(50),
+[Start Date] Datetime,
+[End Date] Datetime,
+DiscountPercent float,
+[Effective Start Date] Datetime
+Constraint PK_Grocery_EDW_Promotion_sk Primary key (Promotion_sk)
+)
+
+
+
+
+--Script to Load Staging Source Data to EDW
+
+USE [Grocery Staging]
+Select [PromotionID], [Promotion], [Effective Start Date], [Effective End Date], [DiscountPercent] FROM [Grocery_OLTP].[Promotion]
+
+--Script to COUNT Source Data to EDW --CURRENT COUNT
+USE [Grocery Staging]
+Select COUNT(*) AS CurrentCount FROM [Grocery_OLTP].[Promotion]
+
+--Script to COUNT Initial EDW Data  --PRE COUNT
+use [Grocery EDW]
+Select COUNT(*) AS PreCount FROM Grocery_EDW.DimPromotion
+
+
+--Script to COUNT Initial EDW Data  --POST COUNT
+use [Grocery EDW]
+Select COUNT(*) AS PostCount FROM Grocery_EDW.DimPromotion
+
+
+---EDW Script to Update Package Table and Insert Into Metrics Table
+  Use [Grocery Control]
+
+  DECLARE @PackageID Int =?
+  DECLARE @PreCount Int =?
+  DECLARE @CurrentCount Int =?
+  DECLARE @PostCount Int =?
+  DECLARE @Type1Count Int =?
+  DECLARE @Type2Count Int =?
+
+  Update Control.Package Set LastRun = Getdate() where PackageID = @PackageID
+
+  Insert into Control.Metrics (PackageID, PreCount, CurrentCount, PostCount, Type1Count, Type2Count, RunDate)
+  Select @PackageID, @PreCount, @CurrentCount, @PostCount, @Type1Count, @Type2Count, Getdate()
+
+---------------------------------------------------------------------------------------********************
+---------------------------------------------------------------------------------------********************
+--ETL OF CUSTOMER TABLE
+
+--Script to Load Customer Source Data to Staging
+use [Grocery Store OLTP]
+select CT.CustomerID, UPPER(CT.LastName) + ', ' + CT.FirstName as Customer, CT.CustomerAddress,
+C.CityName, S.State
+from Customer CT INNER JOIN City C ON C.CityID = CT.CityID
+INNER JOIN State S ON S.StateID = C.StateID
+
+--Script to Count Source Data 
+use [Grocery Store OLTP]
+select Count(*) as OLTPCount
+from Customer CT INNER JOIN City C ON C.CityID = CT.CityID
+INNER JOIN State S ON S.StateID = C.StateID
+
+/*IF Object_ID('Grocery_OLTP.Customer') IS NOT NULL
+Truncate Table Grocery_OLTP.Customer */
+
+USE [Grocery Staging]
+CREATE TABLE Grocery_OLTP.Customer
+(
+CustomerID int,
+Customer nvarchar (255),
+CustomerAddress nvarchar (50),
+CityName nvarchar (50),
+State nvarchar (50)
+constraint pk_Grocery_OLTP_CustomerID Primary Key (CustomerID)
+)
+
+  --Script to Update Package Table and Insert Into Metrics Table
+  Use [Grocery Control]
+
+  DECLARE @PackageID Int =?
+  DECLARE @OLTPCount Int =?
+  DECLARE @StageCount Int =?
+
+  Update Control.Package Set LastRun = Getdate() where PackageID = @PackageID
+
+  Insert into Control.Metrics (PackageID, OLTPCount, StageCount, RunDate)
+  Select @PackageID, @OLTPCount, @StageCount, Getdate()
+
+
+  --Script to Load Customer Staging Source Data to EDW
+
+Use [Grocery Staging]
+
+SELECT [CustomerID]
+      ,[Customer]
+      ,[CustomerAddress]
+      ,[CityName]
+      ,[State]
+  FROM [Grocery_OLTP].[Customer]
+
+
+    --Script to Count Customer Staging Source Data to EDW --CURRENTCOUNT
+Use [Grocery Staging]
+	SELECT count(*)  AS CurrentCount FROM [Grocery_OLTP].[Customer]
+
+
+--Script to Count EDW Data BEFORE LOAD --PRECOUNT
+Use [Grocery EDW]
+	SELECT count(*) as PreCount FROM Grocery_EDW.DimCustomer
+
+	--Script to Count EDW Data AFTER LOAD --POSTCOUNT
+Use [Grocery EDW]
+	SELECT count(*)  as PostCount FROM Grocery_EDW.DimCustomer
+
+
+USE [Grocery EDW]
+
+CREATE TABLE Grocery_EDW.DimCustomer
+(
+Customer_sk INT IDENTITY (1,1),
+CustomerID int,
+Customer nvarchar (255),
+CustomerAddress nvarchar (50),
+CityName nvarchar (50),
+[State] nvarchar (50),
+[Effective Start Date] Datetime,
+[Effective End Date] Datetime,
+constraint pk_Grocery_EDW_Customer_sk Primary Key (Customer_sk )
+)
+
+select * from Grocery_EDW.DimCustomer
+
+---EDW Script to Update Package Table and Insert Into Metrics Table
+  Use [Grocery Control]
+
+  DECLARE @PackageID Int =?
+  DECLARE @PreCount Int =?
+  DECLARE @CurrentCount Int =?
+  DECLARE @PostCount Int =?
+  DECLARE @Type1Count Int =?
+  DECLARE @Type2Count Int =?
+
+  Update Control.Package Set LastRun = Getdate() where PackageID = @PackageID
+
+  Insert into Control.Metrics (PackageID, PreCount, CurrentCount, PostCount, Type1Count, Type2Count, RunDate)
+  Select @PackageID, @PreCount, @CurrentCount, @PostCount, @Type1Count, @Type2Count, Getdate()
+
+---------------------------------------------------------------------------------------********************
+---------------------------------------------------------------------------------------********************
+--ETL OF POSChannel TABLE
+
+--Script to Load POSChanel Source Data to Staging
+
+use [Grocery Store OLTP]
+select [ChannelID], [ChannelNo], [DeviceModel], [SerialNo], [InstallationDate]
+from [dbo].[POSChannel]
+
+--Script to Count POSChanel Source Data 
+
+use [Grocery Store OLTP]
+select Count(*) as OLTPCount
+from [dbo].[POSChannel]
+
+--If Object_ID('Grocery_OLTP.POSChannel ') IS NOT NULL TRUNCATE TABLE Grocery_OLTP.POSChannel 
+
+Use [Grocery Staging]
+
+Create Table Grocery_OLTP.POSChannel 
+(
+[ChannelID] int,
+[ChannelNo] nvarchar (50),
+[DeviceModel] nvarchar (50),
+[SerialNo] nvarchar (50),
+[InstallationDate] datetime,
+Constraint pk_Grocery_OLTP_ChannelID PRIMARY KEY (ChannelID)
+)
+
+
+  --Script to Update Package Table and Insert Into Metrics Table
+  Use [Grocery Control]
+
+  DECLARE @PackageID Int =?
+  DECLARE @OLTPCount Int =?
+  DECLARE @StageCount Int =?
+
+  Update Control.Package Set LastRun = Getdate() where PackageID = @PackageID
+
+  Insert into Control.Metrics (PackageID, OLTPCount, StageCount, RunDate)
+  Select @PackageID, @OLTPCount, @StageCount, Getdate()
+
+
+
+USE [Grocery EDW]
+
+Create Table Grocery_EDW.DimPOSChannel 
+(
+Channel_sk INT IDENTITY (1,1),
+[ChannelID] int,
+[ChannelNo] nvarchar (50),
+[DeviceModel] nvarchar (50),
+[SerialNo] nvarchar (50),
+[InstallationDate] datetime,
+[Effective Start Date] Datetime,
+[Effective End Date] Datetime,
+Constraint pk_Grocery_EDW_Channel_sk PRIMARY KEY (Channel_sk)
+)
+
+    --Script to Load POSChannel Staging Source Data to EDW
+use [Grocery Staging]
+
+SELECT [ChannelID]
+      ,[ChannelNo]
+      ,[DeviceModel]
+      ,[SerialNo]
+      ,[InstallationDate]
+FROM [Grocery_OLTP].[POSChannel]
+
+      --Script to count POSChannel Staging Source Data to EDW --current count
+
+SELECT count (*) as CurrentCount
+FROM [Grocery_OLTP].[POSChannel]
+
+
+--Script to count POSChannel EDW Data before Load --PRECOUNT
+USE [Grocery EDW]
+
+SELECT count (*) as PreCount
+FROM [Grocery_EDW].[DimPOSChannel]  
+
+--Script to count POSChannel EDW Data before Load --PostCOUNT
+USE [Grocery EDW]
+
+SELECT count (*) as PostCount
+FROM [Grocery_EDW].[DimPOSChannel]  
+
+
+--Script to update control package
+use [Grocery Control]
+
+  DECLARE @PackageID Int =?
+  DECLARE @PreCount Int =?
+  DECLARE @CurrentCount Int =?
+  DECLARE @PostCount Int =?
+  DECLARE @Type1Count Int =?
+  DECLARE @Type2Count Int =?
+
+  Update Control.Package Set LastRun = Getdate() where PackageID = @PackageID
+
+  Insert into Control.Metrics (PackageID, PreCount, CurrentCount, PostCount, Type1Count, Type2Count, RunDate)
+  Select @PackageID, @PreCount, @CurrentCount, @PostCount, @Type1Count, @Type2Count, Getdate()
+
+  select * from [Grocery_EDW].[DimPOSChannel]
+
+---------------------------------------------------------------------------------------********************
+---------------------------------------------------------------------------------------********************
+--ETL OF EMPLOYEE TABLE
+
+--Script to Load Employee Source Data to Staging
+Use [Grocery Store OLTP]
+Select E.[EmployeeID], E.[EmployeeNo], E.FirstName, E.LastName, E.DoB, M.MaritalStatus 
+from Employee E INNER JOIN MaritalStatus M on M.MaritalStatusID = E.MaritalStatus
+
+--Script to Count Employee Source Data 
+Use [Grocery Store OLTP]
+Select Count (*) as OLTPCount
+from Employee E INNER JOIN MaritalStatus M on M.MaritalStatusID = E.MaritalStatus
+
+--IF OBJECT_ID('Grocery_OLTP.Employee') IS NOT NULL TRUNCATE TABLE Grocery_OLTP.Employee
+
+  --Script to Update Package Table and Insert Into Metrics Table
+  Use [Grocery Control]
+
+  DECLARE @PackageID Int =?
+  DECLARE @OLTPCount Int =?
+  DECLARE @StageCount Int =?
+
+  Update Control.Package Set LastRun = Getdate() where PackageID = @PackageID
+
+  Insert into Control.Metrics (PackageID, OLTPCount, StageCount, RunDate)
+  Select @PackageID, @OLTPCount, @StageCount, Getdate()
+
+
+USE [Grocery Staging]
+
+Create Table Grocery_OLTP.Employee
+(
+[EmployeeID] int,
+[EmployeeNo] nvarchar (50),
+FirstName nvarchar (50),
+LastName nvarchar (50),
+DoB Date,
+MaritalStatus nvarchar (50),
+Constraint pk_Grocery_OLTP_EmployeeID PRIMARY KEY (EmployeeID)
+)
+
+--------------------
+USE [Grocery EDW]
+
+Create Table Grocery_EDW.DimEmployee
+(
+Employee_sk int identity (1,1),
+[EmployeeID] int,
+[EmployeeNo] nvarchar (50),
+Employee nvarchar (255),
+DateofBirth Date,
+MaritalStatus nvarchar (50),
+[Effective Start Date] Datetime,
+[Effective End Date] Datetime,
+Constraint pk_Grocery_EDW_Employee_sk PRIMARY KEY (Employee_sk)
+)
+
+--Script to Load Employee Staging Source Data to EDW
+
+USE [Grocery Staging]
+GO
+
+SELECT [EmployeeID]
+      ,[EmployeeNo]
+      ,Upper([LastName]) + ', ' +   [FirstName] as Employee
+      ,[DoB]
+      ,[MaritalStatus]
+  FROM [Grocery_OLTP].[Employee]
+
+--Script to count Employee Staging Source Data to EDW --current Count
+
+SELECT count (*) as CurrentCount
+FROM [Grocery_OLTP].[Employee]
+
+
+--Script to count Employee EDW Data before Load --PRECOUNT
+USE [Grocery EDW]
+select * from [Grocery_EDW].[DimEmployee]
+
+SELECT count (*) as PreCount
+FROM [Grocery_EDW].[DimEmployee]
+
+--Script to count EMPLOYEE EDW Data before Load --PostCOUNT
+USE [Grocery EDW]
+
+SELECT count (*) as PostCount
+FROM [Grocery_EDW].[DimEmployee]
+
+--Load Metrics Table
+use [Grocery Control]
+
+  DECLARE @PackageID Int =?
+  DECLARE @PreCount Int =?
+  DECLARE @CurrentCount Int =?
+  DECLARE @PostCount Int =?
+  DECLARE @Type1Count Int =?
+  DECLARE @Type2Count Int =?
+
+  Update Control.Package Set LastRun = Getdate() where PackageID = @PackageID
+
+  Insert into Control.Metrics (PackageID, PreCount, CurrentCount, PostCount, Type1Count, Type2Count, RunDate)
+  Select @PackageID, @PreCount, @CurrentCount, @PostCount, @Type1Count, @Type2Count, Getdate()
+
+---------------------------------------------------------------------------------------********************
+---------------------------------------------------------------------------------------********************
+--ETL OF VENDOR TABLE
+
+--Script to Load Vendor Source Data to Staging
+use [Grocery Store OLTP]
+Select V.[VendorID], [VendorNo], [LastName], [FirstName], [RegistrationNo], [VendorAddress], C.[CityName], S.State
+FROM [dbo].[Vendor] V INNER JOIN CITY C ON C.CityID = V.CityID 
+INNER JOIN STATE S ON S.StateID  = C.StateID
+
+--Script to Count Vendor Source Data 
+use [Grocery Store OLTP]
+Select Count (*) as OLTPCount
+FROM [dbo].[Vendor] V INNER JOIN CITY C ON C.CityID = V.CityID 
+INNER JOIN STATE S ON S.StateID  = C.StateID
+
+--IF OBJECT_ID('Grocery_OLTP.Vendor') IS NOT NULL TRUNCATE TABLE Grocery_OLTP.Vendor
+
+
+  --Script to Update Package Table and Insert Into Metrics Table
+  Use [Grocery Control]
+
+  DECLARE @PackageID Int =?
+  DECLARE @OLTPCount Int =?
+  DECLARE @StageCount Int =?
+
+  Update Control.Package Set LastRun = Getdate() where PackageID = @PackageID
+
+  Insert into Control.Metrics (PackageID, OLTPCount, StageCount, RunDate)
+  Select @PackageID, @OLTPCount, @StageCount, Getdate()
+
+USE [Grocery Staging]
+
+CREATE TABLE Grocery_OLTP.Vendor
+(
+[VendorID] int,
+[VendorNo] nvarchar (255),
+[LastName] nvarchar (255),
+[FirstName] nvarchar (255),
+[RegistrationNo] nvarchar (255),
+[VendorAddress] nvarchar (255),
+[CityName] nvarchar (255),
+[State] nvarchar (255),
+Constraint pk_Grocery_OLTP_VendorID PRIMARY KEY (VendorID)
+)
+
+USE [Grocery Staging]
+
+Select [VendorID], [VendorNo], UPPER([LastName]) + ', '  [FirstName] AS Vendor, [RegistrationNo], [VendorAddress],
+[CityName], [State]
+FROM Grocery_OLTP.Vendor
+
+
+------Script to Load EDW-----------------------------------------
+USE [Grocery EDW]
+
+CREATE TABLE Grocery_EDW.DimVendor
+(
+Vendor_sk int identity (1,1),
+[VendorID] int,
+[VendorNo] nvarchar (255),
+[LastName] nvarchar (255),
+[FirstName] nvarchar (255),
+[RegistrationNo] nvarchar (255),
+[VendorAddress] nvarchar (255),
+[CityName] nvarchar (255),
+[State] nvarchar (255),
+[Effective Start Date] Datetime,
+[Effective End Date] Datetime,
+Constraint pk_Grocery_EDW_Vendor_sk PRIMARY KEY (Vendor_sk)
+)
+
+--Script to Load Employee Staging Source Data to EDW
+
+USE [Grocery Staging]
+GO
+
+SELECT [VendorID]
+      ,[VendorNo]
+      ,[LastName]
+      ,[FirstName]
+      ,[RegistrationNo]
+      ,[VendorAddress]
+      ,[CityName]
+      ,[State]
+  FROM [Grocery_OLTP].[Vendor]
+
+GO
+
+--Script to Count Vendor Source Data --CurrentCount
+USE [Grocery Staging]
+GO
+
+SELECT Count(*) as CurrentCount
+  FROM [Grocery_OLTP].[Vendor]
+
+  TRUNCATE TABLE 
+
+  USE [Grocery EDW]
+
+  --Script to Count DimVendor  Data before Load --PreCount
+Select Count(*) as PreCount from [Grocery_EDW].[DimVendor]
+
+  --Script to Count DimVendor  Data After Load --PreCount
+Select Count(*) as PostCount from [Grocery_EDW].[DimVendor]
+
+--Load Metrics Table
+use [Grocery Control]
+
+  DECLARE @PackageID Int =?
+  DECLARE @PreCount Int =?
+  DECLARE @CurrentCount Int =?
+  DECLARE @PostCount Int =?
+  DECLARE @Type1Count Int =?
+  DECLARE @Type2Count Int =?
+
+  Update Control.Package Set LastRun = Getdate() where PackageID = @PackageID
+
+  Insert into Control.Metrics (PackageID, PreCount, CurrentCount, PostCount, Type1Count, Type2Count, RunDate)
+  Select @PackageID, @PreCount, @CurrentCount, @PostCount, @Type1Count, @Type2Count, Getdate()
+
+---------------------------------------------------------------------------------------
+--Script to Create DateTable 
+use [Grocery EDW]
+Create Table Grocery_EDW.DimDate
+(
+DateKey int,
+[Date] Date,
+[Day] int,
+[Month] int,
+[Year] int,
+DayofWeekName nvarchar (20),
+[EnglishMonthName] nvarchar (20),
+[Quarter] nvarchar (10),
+[DayNumberofWeek] int,
+[DayNumberofYear] int, --AKA julianday
+[WeekofYear] int,
+[SpanishDayofWeekName] nvarchar (20),
+[FrenchDayofWeekName] nvarchar (20),
+[SpanishMonthName] nvarchar (20),
+
+Constraint Grocery_EDW_DimDate PRIMARY KEY (DateKey)
+)
+
+ALTER TABLE [Grocery_EDW].[DimDate] ADD FrenchMonthname nvarchar (20)
+
+Create Table Grocery_EDW.DimHour
+(
+HourKey int,
+[Hour] int,
+PeriodofDay nvarchar (20),
+BusinessHour nvarchar (20) --0-8 closed, 9 - 17 open, 18 - 23 closed
+Constraint Grocery_EDW_DimHour PRIMARY KEY (HourKey)
+)
+
+---------------------------------------------------------------------------------------
+--ETL OF FACT SALES TRANSACTION INITAL TABLE FROM MIN(DATE) TO GETDATE-
+
+
+--SCRIP TO load INITAL FACT SALES TRANSACTION 
+USE [Grocery Store OLTP]
+SELECT S.TransactionID, S.[TransactionNO], convert(date, S.[TransDate]) TransDate, datepart(HOUR,S.Transdate) AS TransHour,
+convert(date, S.[OrderDate]) OrderDate, datepart(HOUR,S.OrderDate) OrderHour, convert(date, S.[DeliveryDate]) DeliveyDate,
+S.[ChannelID], S.[CustomerID], S.[EmployeeID], S.[ProductID], S.[StoreID], S.[PromotionID],
+S.Quantity, S.TaxAmount, S.LineAmount, S.LineDiscountAmount
+from  [dbo].[SalesTransaction] S
+WHERE CAST(S.TransDate AS DATE) <= CAST(DATEADD(DAY,-1,GETDATE()) AS DATE)
+
+
+--SCRIP TO load icremental FACT SALES TRANSACTION 
+USE [Grocery Store OLTP]
+SELECT S.TransactionID, S.[TransactionNO], convert(date, S.[TransDate]) TransDate, datepart(HOUR,S.Transdate) AS TransHour,
+convert(date, S.[OrderDate]) OrderDate, datepart(HOUR,S.OrderDate) OrderHour, convert(date, S.[DeliveryDate]) DeliveyDate,
+S.[ChannelID], S.[CustomerID], S.[EmployeeID], S.[ProductID], S.[StoreID], S.[PromotionID],
+S.Quantity, S.TaxAmount, S.LineAmount, S.LineDiscountAmount
+from  [dbo].[SalesTransaction] S
+WHERE CAST(S.TransDate AS DATE) = CAST(DATEADD(DAY,-1,GETDATE()) AS DATE)
+
+--SCRIP TO Count SALES TRANSACTION Source Data
+USE [Grocery Store OLTP]
+SELECT Count(*) as OLTPCount
+from  [dbo].[SalesTransaction] S
+WHERE CAST(S.TransDate AS DATE) <= cast(DATEADD(DAY,-1,GETDATE()) as date)
+
+--SCRIP TO Count SALES TRANSACTION Source Data
+USE [Grocery Store OLTP]
+SELECT Count(*) as OLTPCount
+from  [dbo].[SalesTransaction] S
+WHERE CAST(S.TransDate AS DATE ) = cast(DATEADD(DAY,-1,GETDATE()) as date)
+
+---------------------------------------------------------------------------------------
+--ETL OF FACT [SalesAnalysis] INITAL TABLE --FROM MIN(DATE) TO GETDATE-1
+USE [Grocery Staging]
+--IF OBJECT_ID('Grocery_OLTP.SalesAnalysis') IS NOT NULL TRUNCATE TABLE Grocery_OLTP.SalesAnalysis
+
+  --Script to Update Package Table and Insert Into Metrics Table
+  Use [Grocery Control]
+
+  DECLARE @PackageID Int =?
+  DECLARE @OLTPCount Int =?
+  DECLARE @StageCount Int =?
+
+  Update Control.Package Set LastRun = Getdate() where PackageID = @PackageID
+
+  Insert into Control.Metrics (PackageID, OLTPCount, StageCount, RunDate)
+  Select @PackageID, @OLTPCount, @StageCount, Getdate()
+
+ /* USE [Grocery Staging]
+  ALTER TABLE Grocery_OLTP.SalesAnalysis ADD LoadDate Datetime */
+ 
+
+USE [Grocery Staging]
+CREATE TABLE Grocery_OLTP.SalesAnalysis
+(
+TransactionID INT,
+TransactionNo nvarchar (50),
+TransDate date,
+TransHour int,
+OrderDate date,
+OrderHour int,
+DeliveryDate date,
+ChannelID INT,
+CustomerID INT,
+EmployeeID int,
+ProductID INT,
+StoreID INT, 
+PromotionID INT,
+Quantity Float,
+TaxAmount Float,
+LineAmount Float,
+LineDiscountAmount Float
+Constraint pk_Grocery_OLTP_SaleAnalysis PRIMARY KEY (TransactionID)
+)
+
+--Script to create  Grocery_EDW.Fact_SalesTrans
+USE [Grocery EDW]
+CREATE TABLE Grocery_EDW.Fact_SalesTrans
+(
+Sales_sk INT IDENTITY (1,1),
+TransactionNo nvarchar (50),
+Store_sk int,
+TransDate_sk int,
+TransHour_sk int,
+OrderDate_sk int,
+OrderHour_sk int,
+DeliveryDate_sk int,
+Channel_sk int,
+Customer_sk int,
+Employee_sk int,
+Product_sk int,
+Promotion_sk int,
+Quantity Float,
+TaxAmount Float,
+LineAmount Float,
+LineDiscountAmount Float,
+LoadDate datetime default getdate(),
+CONSTRAINT PK_Grocery_EDW_FactSale PRIMARY KEY (Sales_sk),
+CONSTRAINT FK_Grocery_EDW_FactSale_DimStore foreign key (Store_sk) references [Grocery_EDW].[DimStore](Store_sk),
+CONSTRAINT FK_Grocery_EDW_FactSale_TransDate foreign key (TransDate_sk) references [Grocery_EDW].[DimDate](DateKey),
+CONSTRAINT FK_Grocery_EDW_FactSale_OrderDate foreign key (OrderDate_sk) references [Grocery_EDW].[DimDate](DateKey),
+CONSTRAINT FK_Grocery_EDW_FactSale_DeliveryDate foreign key (DeliveryDate_sk) references [Grocery_EDW].[DimDate](DateKey),
+CONSTRAINT FK_Grocery_EDW_FactSale_OrderHour foreign key (OrderHour_sk) references [Grocery_EDW].[DimHour](HourKey),
+CONSTRAINT FK_Grocery_EDW_FactSale_TransHour foreign key (TransHour_sk) references [Grocery_EDW].[DimHour](HourKey),
+CONSTRAINT FK_Grocery_EDW_FactSale_Channel foreign key (Channel_sk) references [Grocery_EDW].[DimPOSChannel]([Channel_sk]),
+CONSTRAINT FK_Grocery_EDW_FactSale_Customer foreign key (Customer_sk) references [Grocery_EDW].[DimCustomer]([Customer_sk]),
+CONSTRAINT FK_Grocery_EDW_FactSale_Employee foreign key (Employee_sk) references [Grocery_EDW].[DimEmployee]([Employee_sk]),
+CONSTRAINT FK_Grocery_EDW_FactSale_Product foreign key (Product_sk) references [Grocery_EDW].[DimProduct]([Product_sk]),
+CONSTRAINT FK_Grocery_EDW_FactSale_Promotion foreign key (Promotion_sk) references [Grocery_EDW].[DimPromotion]([Promotion_sk])
+)
+
+EXEC sp_help 'Grocery_EDW.Fact_SalesTrans'
+
+--Script to Load Grocery_EDW.Fact_SalesTrans ----------------------------------------
+
+USE  [Grocery Staging]
+GO
+
+--Initial Load
+
+IF (SELECT COUNT(*) FROM [Grocery EDW].[Grocery_EDW].[Fact_SalesTrans]) < 1  
+BEGIN
+SELECT [TransactionID] ,[TransactionNo]
+      ,[TransDate] ,[TransHour]
+      ,[OrderDate] ,[OrderHour]
+      ,[DeliveryDate] ,[ChannelID]
+      ,[CustomerID] ,[EmployeeID]
+      ,[ProductID]  ,[StoreID]
+      ,[PromotionID] ,[Quantity]
+      ,[TaxAmount] ,[LineAmount]
+      ,[LineDiscountAmount]
+	  ,GETDATE() AS LaodDate
+FROM [Grocery Staging].[Grocery_OLTP].[SalesAnalysis]
+WHERE CAST([TransDate] AS DATE) <= CAST(DATEADD(DAY, -1, GETDATE()) AS DATE)
+END
+
+ELSE
+
+BEGIN
+-- Incremental Load
+SELECT [TransactionID] ,[TransactionNo]
+      ,[TransDate] ,[TransHour]
+      ,[OrderDate] ,[OrderHour]
+      ,[DeliveryDate] ,[ChannelID]
+      ,[CustomerID] ,[EmployeeID]
+      ,[ProductID]  ,[StoreID]
+      ,[PromotionID] ,[Quantity]
+      ,[TaxAmount] ,[LineAmount]
+      ,[LineDiscountAmount]
+	  ,GETDATE() AS LaodDate
+FROM [Grocery Staging].[Grocery_OLTP].[SalesAnalysis]
+WHERE CAST([TransDate] AS DATE) = CAST(DATEADD(DAY, -1, GETDATE()) AS DATE)
+END
+
+--Scripts to Lookup Columns IN Dim Tables and Return SK in Fact Table
+/*Lookup StoreID and return Store-sk  filter effective enddate = null 
+if SCD Type = 2 */
+
+SELECT [Store_sk], [StoreID] FROM [Grocery_EDW].[DimStore]
+SELECT [DateKey], [Date] FROM [Grocery_EDW].[DimDate]
+SELECT [HourKey], [Hour] FROM [Grocery_EDW].[DimHour]
+SELECT [Channel_sk],[ChannelID] FROM [Grocery_EDW].[DimPOSChannel] WHERE [Effective End Date] IS NULL
+SELECT [Customer_sk], [CustomerID] FROM [Grocery_EDW].[DimCustomer] WHERE [Effective End Date] IS NULL
+SELECT [Employee_sk], [EmployeeID] FROM [Grocery_EDW].[DimEmployee] WHERE [Effective End Date] IS NULL
+SELECT [Product_sk], [ProductID] FROM [Grocery_EDW].[DimProduct] WHERE [Effective End Date] IS NULL
+SELECT [Promotion_sk], [PromotionID] FROM [Grocery_EDW].[DimPromotion]
+
+
+--Script to Count Grocery_OLTP.SalesAnalysis Source Data --CurrentCount
+USE [Grocery Staging]
+GO
+
+SELECT Count(*) as CurrentCount
+  FROM Grocery_OLTP.SalesAnalysis
+
+
+ USE [Grocery EDW]
+
+  --Script to Count [Grocery_EDW].[Fact_SalesTrans]   Data before Load --PreCount
+Select Count(*) as PreCount from [Grocery_EDW].[Fact_SalesTrans] 
+
+  --Script to Count [Grocery_EDW].[Fact_SalesTrans]   Data After Load --PreCount
+Select Count(*) as PostCount from [Grocery_EDW].[Fact_SalesTrans] 
+
+
+--SCRIPT TO LOAD METRICS TABLE
+
+DECLARE @PackageID Int = ?
+DECLARE @CurrentCount Int =?
+DECLARE @PreCount Int = ?
+DECLARE @PostCount Int = ?
+
+Update [Control].[Package] Set LastRun = GETDATE() WHERE PackageID = @PackageID
+Insert Into [Control].[Metrics] (PackageID, CurrentCount, PreCount, PostCount, RunDate)
+Select @PackageID, @CurrentCount, @PreCount, @PostCount, GETDATE()
+
+select * from [Grocery_EDW].[Fact_SalesTrans]
+---------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------
+--ETL OF FACT PURCHASE TRANSACTION
+
+--SCRIPT TO COUNT FACT PURCHASE TRANSACTION INITAL TABLE FROM MIN(DATE) TO GETDATE-1
+
+USE [Grocery Store OLTP]
+SELECT COUNT(*) as OLTPCount
+from  [dbo].[PurchaseTransaction] P
+WHERE CAST(P.TransDate AS DATE) <= cast(DATEADD(DAY,-1,GETDATE()) as date)
+
+
+--SCRIPT TO COUNT FACT PURCHASE TRANSACTION TABLE 
+
+USE [Grocery Store OLTP]
+SELECT COUNT(*)
+from  [dbo].[PurchaseTransaction] P
+WHERE CAST(P.TransDate AS DATE) = cast(DATEADD(DAY,-1,GETDATE()) as date)
+
+
+--SCRIPT TO CREATE FACT PURCHASE TRANSACTION
+--Initial Load
+USE [Grocery Store OLTP]
+SELECT P.TransactionID, P.[TransactionNO], convert(date, P.[TransDate]) TransDate, convert(date, P.[OrderDate]) OrderDate, 
+convert(date, P.[ShipDate]) ShipDate, convert(date, P.[DeliveryDate]) DeliveyDate, VendorID, EmployeeID, ProductID, StoreID,
+P.Quantity, P.TaxAmount, P.LineAmount,DateDiff(day, p.[OrderDate], P.[DeliveryDate]) as DeliveryEfficiency
+from  [dbo].[PurchaseTransaction] P
+WHERE CAST(P.TransDate AS DATE) <= cast(DATEADD(DAY,-1,GETDATE()) as date)
+
+--Incremental Load
+USE [Grocery Store OLTP]
+SELECT P.TransactionID, P.[TransactionNO], convert(date, P.[TransDate]) TransDate, convert(date, P.[OrderDate]) OrderDate, 
+convert(date, P.[ShipDate]) ShipDate, convert(date, P.[DeliveryDate]) DeliveyDate, VendorID, EmployeeID, ProductID, StoreID,
+P.Quantity, P.TaxAmount, P.LineAmount,DateDiff(day, p.[OrderDate], P.[DeliveryDate]) as DeliveryEfficiency
+from  [dbo].[PurchaseTransaction] P
+WHERE CAST(P.TransDate AS DATE) = cast(DATEADD(DAY,-1,GETDATE()) as date)
+
+
+--IF OBJECT_ID('Grocery_OLTP.PurchaseAnalysis') IS NOT NULL TRUNCATE TABLE Grocery_OLTP.PurchaseAnalysis
+
+  --Script to Update Package Table and Insert Into Metrics Table
+  Use [Grocery Control]
+
+  DECLARE @PackageID Int =?
+  DECLARE @OLTPCount Int =?
+  DECLARE @StageCount Int =?
+
+  Update Control.Package Set LastRun = Getdate() where PackageID = @PackageID
+
+  Insert into Control.Metrics (PackageID, OLTPCount, StageCount, RunDate)
+  Select @PackageID, @OLTPCount, @StageCount, Getdate()
+
+ -- Alter Table Grocery_OLTP.PurchaseAnalysis Add LoadDate Datetime
+
+USE [Grocery Staging]
+CREATE TABLE Grocery_OLTP.PurchaseAnalysis
+(
+TransactionID INT,
+TransactionNo nvarchar (50),
+TransDate date,
+OrderDate date,
+DeliveryDate date,
+ShipDate date,
+VendorID INT,
+EmployeeID int,
+ProductID INT,
+StoreID INT, 
+Quantity Float,
+TaxAmount Float,
+LineAmount Float,
+Constraint pk_Grocery_OLTP_PurchaseAnalysis PRIMARY KEY (TransactionID)
+)
+alter table Grocery_OLTP.PurchaseAnalysis add DeliveryEfficiency Int
+
+
+----- load EDW
+
+USE [Grocery EDW]
+CREATE TABLE Grocery_EDW.Fact_PurchaseTrans
+(
+Sales_sk INT IDENTITY (1,1),
+TransactionNo nvarchar (50),
+Store_sk int,
+TransDate_sk int,
+OrderDate_sk int,
+DeliveryDate_sk int,
+ShipDate_sk int,
+Vendor_sk int,
+Employee_sk int,
+Product_sk int,
+Quantity Float,
+TaxAmount Float,
+LineAmount Float,
+DeliveryEfficiency Int,
+LoadDate datetime default getdate(),
+CONSTRAINT PK_Grocery_EDW_FactPurchase PRIMARY KEY (Sales_sk),
+CONSTRAINT FK_Grocery_EDW_FactPurchase_DimStore foreign key (Store_sk) references [Grocery_EDW].[DimStore](Store_sk),
+CONSTRAINT FK_Grocery_EDW_FactPurchase_TransDate foreign key (TransDate_sk) references [Grocery_EDW].[DimDate](DateKey),
+CONSTRAINT FK_Grocery_EDW_FactPurchase_OrderDate foreign key (OrderDate_sk) references [Grocery_EDW].[DimDate](DateKey),
+CONSTRAINT FK_Grocery_EDW_FactPurchase_DeliveryDate foreign key (DeliveryDate_sk) references [Grocery_EDW].[DimDate](DateKey),
+CONSTRAINT FK_Grocery_EDW_FactPurchase_ShipDate foreign key (ShipDate_sk) references [Grocery_EDW].[DimDate](DateKey),
+CONSTRAINT FK_Grocery_EDW_FactPurchase_Vendor foreign key (Vendor_sk) references [Grocery_EDW].[DimVendor](Vendor_sk),
+CONSTRAINT FK_Grocery_EDW_FactPurchase_Employee foreign key (Employee_sk) references [Grocery_EDW].[DimEmployee]([Employee_sk]),
+CONSTRAINT FK_Grocery_EDW_FactPurchase_Product foreign key (Product_sk) references [Grocery_EDW].[DimProduct]([Product_sk])
+)
+
+--Script to Load Grocery_EDW.Fact_SalesTrans ----------------------------------------
+
+
+--Initial Load
+USE [Grocery Staging]
+GO
+
+IF (SELECT COUNT(*)  FROM [Grocery EDW].[Grocery_EDW].[Fact_PurchaseTrans]) < 1
+BEGIN
+SELECT [TransactionID] ,[TransactionNo]
+      ,[TransDate], [OrderDate]
+      ,[DeliveryDate] ,[ShipDate]
+      ,[VendorID] ,[EmployeeID]
+      ,[ProductID] ,[StoreID]
+      ,[Quantity] ,[TaxAmount]
+      ,[LineAmount]  , [DeliveryEfficiency] , [LoadDate]
+FROM [Grocery_OLTP].[PurchaseAnalysis]
+WHERE CAST(TransDate AS DATE) <= CAST(DATEADD(DAY, -1, GETDATE()) AS DATE)
+END
+
+ELSE
+--Incremental Load
+BEGIN
+SELECT [TransactionID] ,[TransactionNo]
+      ,[TransDate], [OrderDate]
+      ,[DeliveryDate] ,[ShipDate]
+      ,[VendorID] ,[EmployeeID]
+      ,[ProductID] ,[StoreID]
+      ,[Quantity] ,[TaxAmount]
+	  ,[LineAmount]  , [DeliveryEfficiency] , [LoadDate]
+FROM [Grocery_OLTP].[PurchaseAnalysis]
+WHERE CAST(TransDate AS DATE) = CAST(DATEADD(DAY, -1, GETDATE()) AS DATE)
+END
+
+
+--Scripts to Lookup Columns IN Dim Tables and Return SK in Fact Table
+/*Lookup StoreID and return Store-sk  filter effective enddate = null 
+if SCD Type = 2 */
+
+SELECT [Store_sk], [StoreID] FROM [Grocery_EDW].[DimStore]
+SELECT [DateKey], [Date] FROM [Grocery_EDW].[DimDate]
+SELECT [Vendor_sk], [VendorID] FROM [Grocery_EDW].[DimVendor] WHERE [Effective End Date] IS NULL
+SELECT [Employee_sk], [EmployeeID] FROM [Grocery_EDW].[DimEmployee] WHERE [Effective End Date] IS NULL
+SELECT [Product_sk], [ProductID] FROM [Grocery_EDW].[DimProduct] WHERE [Effective End Date] IS NULL
+
+
+--Script to Count [Grocery_OLTP].[PurchaseAnalysis] Source Data --CurrentCount
+USE [Grocery Staging]
+GO
+
+SELECT Count(*) as CurrentCount
+  FROM [Grocery_OLTP].[PurchaseAnalysis]
+
+
+ USE [Grocery EDW]
+
+  --Script to Count [Grocery_EDW].[Fact_PurchaseTrans]   Data before Load --PreCount
+Select Count(*) as PreCount from [Grocery_EDW].[Fact_PurchaseTrans]
+
+  --Script to Count [Grocery_EDW].[Fact_PurchaseTrans]  Data After Load --PreCount
+Select Count(*) as PostCount from [Grocery_EDW].[Fact_PurchaseTrans]
+
+
+--SCRIPT TO LOAD METRICS TABLE
+
+DECLARE @PackageID Int = ?
+DECLARE @CurrentCount Int =?
+DECLARE @PreCount Int = ?
+DECLARE @PostCount Int = ?
+
+Update [Control].[Package] Set LastRun = GETDATE() WHERE PackageID = @PackageID
+Insert Into [Control].[Metrics] (PackageID, CurrentCount, PreCount, PostCount, RunDate)
+Select @PackageID, @CurrentCount, @PreCount, @PostCount, GETDATE()
+
+select * from [Grocery_EDW].[Fact_PurchaseTrans]
+
+
+---------------------------------------------------------------------------------------
+--ETL OF FACT PURCHASE TRANSACTION
+--IF OBJECT_ID('[Grocery_OLTP].HR_Analysis') IS NOT NULL TRUNCATE TABLE [Grocery_OLTP].HR_Analysis
+
+--Alter table [Grocery_OLTP].HR_Analysis Add LoadDate Datetime
+
+--SCRIPT TO CREATE FACT HR ANALYSIS
+
+
+USE [Grocery Staging]
+
+Create Table [Grocery_OLTP].HR_Analysis
+(
+OverTimeID INT,
+EmployeeNo nvarchar (20),
+FirstName nvarchar (20),
+LastName nvarchar (20),
+StartOvertime datetime,
+EndOvertime datetime,
+Constraint PK_Grocery_OLTP_HRAnalysis primary key (OverTimeID)
+)
+
+--Alter table [Grocery_OLTP].HR_Analysis alter column EmployeeNo nvarchar (50)
+
+
+select OverTimeID, EmployeeNo, FirstName, LastName, cast(StartOvertime as date), datepart(hour, StartOvertime),
+cast(EndOvertime as date), datepart(hour,EndOvertime), datediff(hour, StartOvertime, EndOvertime) as Overtime
+from [Grocery_OLTP].HR_Analysis
+
+--------Create EDW
+use [Grocery EDW]
+
+Create Table Grocery_EDW.Fact_HR_Analysis
+(
+Overtime_sk int identity (1,1),
+OverTime INT,
+Employee_sk int,
+OvertimeStartDate_sk int,
+OvertimeStartHour_sk int,
+OvertimeEndDate_sk int,
+OvertimeEndHour_sk int,
+LoadDate Datetime,
+Constraint PK_Grocery_EDW_Fact_HRAnalysis primary key (Overtime_sk),
+CONSTRAINT FK_Grocery_EDW_Fact_HRAnalysis_Employee foreign key (Employee_sk) references [Grocery_EDW].[DimEmployee]([Employee_sk]),
+CONSTRAINT FK_Grocery_EDW_Fact_HRAnalysis_OvertimeStartDate foreign key (OvertimeStartDate_sk) references [Grocery_EDW].[DimDate](DateKey),
+CONSTRAINT FK_Grocery_EDW_Fact_HRAnalysis_OvertimeEndDate foreign key (OvertimeEndDate_sk) references [Grocery_EDW].[DimDate](DateKey),
+CONSTRAINT FK_Grocery_EDW_Fact_HRAnalysis_OvertimeStartHour foreign key (OvertimeStartHour_sk) references [Grocery_EDW].[DimHour](HourKey),
+CONSTRAINT FK_Grocery_EDW_Fact_HRAnalysis_OvertimeEndHour foreign key (OvertimeEndHour_sk) references [Grocery_EDW].[DimHour](HourKey),
+)
+
+----Script to Load EDW
+USE [Grocery Staging]
+--initial full Load
+IF (SELECT COUNT(*) FROM [Grocery EDW].[Grocery_EDW].[Fact_HR_Analysis] ) <1 
+BEGIN
+select OverTimeID, EmployeeNo, FirstName, LastName, cast(StartOvertime as date) AS OverTimeStartDate, 
+datepart(hour, StartOvertime) AS OverTimeStartTime,
+cast(EndOvertime as date) AS OverTimeEndDate, datepart(hour,EndOvertime) AS 
+OverTimeEndTime, datediff(hour, StartOvertime, EndOvertime) as Overtime, Getdate() as LoadDate
+from [Grocery_OLTP].HR_Analysis
+WHERE CAST(StartOvertime AS DATE) <= CAST(DATEADD(DAY, -1, GETDATE()) AS DATE)
+END
+
+ELSE 
+
+BEGIN
+--Incremental Load
+select OverTimeID, EmployeeNo, FirstName, LastName, cast(StartOvertime as date) AS OverTimeStartDate, datepart(hour, StartOvertime) AS OverTimeStartTime,
+cast(EndOvertime as date) AS OverTimeEndDate, datepart(hour,EndOvertime) AS OverTimeEndTime, datediff(hour, StartOvertime, EndOvertime) as Overtime,
+Getdate() as LoadDate
+from [Grocery_OLTP].HR_Analysis
+WHERE CAST(StartOvertime AS DATE) = CAST(DATEADD(DAY, -1, GETDATE()) AS DATE)
+END
+
+
+
+--Scripts to Lookup Columns IN Dim Tables and Return SK in Fact Table
+/*Lookup EmployeeNo and return Store-sk  filter effective enddate = null 
+if SCD Type = 2 */
+
+SELECT [DateKey], [Date] FROM [Grocery_EDW].[DimDate]
+SELECT [HourKey], [Hour] FROM [Grocery_EDW].[DimHour]
+SELECT [Employee_sk], [EmployeeNo] FROM [Grocery_EDW].[DimEmployee] WHERE [Effective End Date] IS NULL
+
+
+--Script to Count [Grocery_OLTP].[PurchaseAnalysis] Source Data --CurrentCount
+USE [Grocery Staging]
+GO
+
+SELECT Count(*) as CurrentCount
+  FROM [Grocery_OLTP].[HR_Analysis]
+
+
+ USE [Grocery EDW]
+
+  --Script to Count [Grocery_EDW].[Fact_PurchaseTrans]   Data before Load --PreCount
+Select Count(*) as PreCount from [Grocery_EDW].[Fact_HR_Analysis]
+
+  --Script to Count [Grocery_EDW].[Fact_PurchaseTrans]  Data After Load --PreCount
+Select Count(*) as PostCount from [Grocery_EDW].[Fact_HR_Analysis]
+
+
+--SCRIPT TO LOAD METRICS TABLE
+
+DECLARE @PackageID Int = ?
+DECLARE @CurrentCount Int =?
+DECLARE @PreCount Int = ?
+DECLARE @PostCount Int = ?
+
+Update [Control].[Package] Set LastRun = GETDATE() WHERE PackageID = @PackageID
+Insert Into [Control].[Metrics] (PackageID, CurrentCount, PreCount, PostCount, RunDate)
+Select @PackageID, @CurrentCount, @PreCount, @PostCount, GETDATE()
+
+---------------------------------------------------------------------------------------
+--script to create control packages
+use [Grocery Control]
+
+Create Table Package
+  (
+  PackageID int identity (1,1),
+  PackageName NVARCHAR (255),
+  ProjectID int,
+  CategoryID int,
+  SequenceID int,
+  StartDate DATETIME,
+  EndDate DATETIME,
+  LastRun DATETIME,
+  constraint Package_PK PRIMARY KEY (PackageID),
+  constraint Control_Package_Project_fk foreign key (ProjectID) references Project(ProjectID),
+    constraint Control_Package_Category_fk foreign key (CategoryID) references [Category](CategoryID)
+
+  )
+
+
+  create table Metrics
+  (
+  MetricsID   int identity (1,1),
+  PackageID INT,
+  OLTPCount int,
+  StagingCount int,
+  PreCount int,
+  CurrentCount int,
+  Type1Count int,
+  Type2Count int,
+  PostCount int,
+  RunTime DateTime
+  Constraint Metric_PK primary key (MetricsID ),
+  Constraint Metrics_Package_fk foreign key (PackageID) references [dbo].[Package] (PackageID)
+  )
+
+
+  Insert into Control.Package ([PackageName],[ProjectID], [CategoryID],[SequenceID] , [StartDate])
+  values
+  ('StgStore.dtsx', 1,1,100, GETDATE()),
+  ('StgProduct.dtsx', 1,1,200, GETDATE()),
+  ('StgPromotion.dtsx', 1,1,300, GETDATE()),
+  ('StgCustomer.dtsx', 1,1,400, GETDATE()),
+  ('StagPOSChannel.dtsx', 1,1,500, GETDATE()),
+  ('StgEmployee.dtsx', 1,1,600, GETDATE()),
+  ('StgVendor.dtsx', 1,1,700, GETDATE()),
+  ('Initial_SalesTrans.dtsx', 1,2,1000, GETDATE()),
+  ('SalesTrans.dtsx', 1,2,1001, dateadd(day,1,getdate())),
+  ('Initial_PurchaseTrans.dtsx', 1,2,2000, GETDATE()),
+  ('PurchaseTrans.dtsx', 1,2,2001, DATEADD(DAY,1,GETDATE())),
+ ('HR_Analysis.dtsx', 1,2,3000, dateadd(day,1,GETDATE())),
+('InitialHR_Analysis.dtsx', 1,2,3001, GETDATE())
+
+   Insert into Control.Package ([PackageName],[ProjectID], [CategoryID],[SequenceID] , [StartDate])
+  values
+  ('DimStore.dtsx', 1,1,100, GETDATE()),
+  ('DimProduct.dtsx', 1,1,200, GETDATE()),
+  ('DimPromotion.dtsx', 1,1,300, GETDATE()),
+  ('DimCustomer.dtsx', 1,1,400, GETDATE()),
+  ('DimPOSChannel.dtsx', 1,1,500, GETDATE()),
+  ('DimEmployee.dtsx', 1,1,600, GETDATE()),
+  ('DimVendor.dtsx', 1,1,700, GETDATE()),
+  ('Fact_SalesTrans.dtsx', 1,2,1000, GETDATE()),
+  ('Fact_PurchaseTrans.dtsx', 1,2,2001, DATEADD(DAY,1,GETDATE())),
+  ('Fact_HR_Analysis.dtsx', 1,2,3001, DATEADD(DAY,1,GETDATE()))
+
+--update [dbo].[OvertimeData] set [StartOvertime] = dateadd(year,2,[StartOvertime]), [EndOvertime] = dateadd(year,2, [EndOvertime])
+
+------------------------------------------------------------------------------------------
+--SSIS CONTROL PACKAGE
+USE [Grocery Control]
+select [PackageID], [SequenceID], [PackageName] from [Control].[Package] 
+WHERE ProjectID = 1 and StartDate <= cast(getdate() as date) and (EndDate is Null or EndDate >= cast(getdate() as date))
+Order by SequenceID

@@ -1,0 +1,136 @@
+Use [Grocery Control]
+--Create Schema Control
+
+Create Table Control.PackageProject
+(
+ProjectID int,
+ProjectName nvarchar (255)
+Constraint PackageProject_PK Primary Key (ProjectID)
+)
+
+Insert into Control.PackageProject (ProjectID, ProjectName) values 
+(1, 'Staging'),
+(2, 'EDW')
+
+Create Table Control.PackageCategory
+(
+CategoryID int,
+CategoryName nvarchar (255)
+Constraint PackageCategory_PK Primary Key (CategoryID)
+)
+
+Insert into Control.PackageCategory (CategoryID, CategoryName) values
+(1, 'Dimension'),
+(2, 'Fact')
+
+
+Create Table Control.Package
+(
+PackageID Int Identity (1,1) ,
+PackageName nvarchar (255),
+ProjectID Int,
+CategoryID Int,
+SequenceID Int,
+StartDate Date,
+EndDate Date,
+LastRun Datetime,
+Constraint Package_PK Primary Key (PackageID),
+Constraint Package_Project_FK Foreign Key (ProjectID) references Control.PackageProject (ProjectID),
+Constraint Package_Category_FK Foreign Key (CategoryID) references Control.PackageCategory (CategoryID),
+)
+
+Insert Into Control.Package (PackageName, ProjectID, CategoryID, SequenceID, StartDate) values
+('Store.dtsx', 1,1, 100, GETDATE()),
+('Product.dtsx', 1,1,200, GETDATE()),
+('Promotion.dtsx', 1,1,300, GETDATE()),
+('Customer.dtsx', 1,1,400, GETDATE()),
+('POSChannel.dtsx', 1,1,500, GETDATE()),
+('Employee.dtsx', 1,1,600, GETDATE()),
+('Vendor.dtsx', 1,1,700, GETDATE()),
+
+('SalesTrans.dtsx', 1,2,1000, dateadd(day,1,GETDATE())),
+('InitialSalesTrans.dtsx', 1,2,1001, GETDATE()),
+
+('PurchaseTrans.dtsx', 1,2,2000, dateadd(day,1,GETDATE())),
+('InitialPurchaseTrans.dtsx', 1,2,2001, GETDATE()),
+
+('HR_Analysis.dtsx', 1,2,3000, dateadd(day,1,GETDATE())),
+('InitialHR_Analysis.dtsx', 1,2,3001, GETDATE())
+
+
+   Insert into Control.Package ([PackageName],[ProjectID], [CategoryID],[SequenceID] , [StartDate])
+  values
+  ('EDWStore.dtsx', 2,1,100, GETDATE()),
+  ('EDWProduct.dtsx', 2,1,200, GETDATE()),
+  ('EDWPromotion.dtsx', 2,1,300, GETDATE()),
+  ('EDWCustomer.dtsx', 2,1,400, GETDATE()),
+  ('EDWPOSChannel.dtsx', 2,1,500, GETDATE()),
+  ('EDWEmployee.dtsx', 2,1,600, GETDATE()),
+  ('EDWVendor.dtsx', 2,1,700, GETDATE()),
+  ('EDW_Fact_InitialSalesTrans.dtsx', 2,2,1000, GETDATE()),
+  ('EDW_Fact_SalesTrans.dtsx', 2,2,1001, GETDATE()),
+    ('EDW_Fact_InitialPurchaseTrans.dtsx', 2,2,2000, DATEADD(DAY,1,GETDATE())),
+  ('EDW_Fact_PurchaseTrans.dtsx', 2,2,2001, DATEADD(DAY,1,GETDATE())),
+    ('EDW_HR_InitialAnalysis.dtsx', 2,2,3001, DATEADD(DAY,1,GETDATE()))
+  ('EDW_HR_Analysis.dtsx', 2,2,3000, DATEADD(DAY,1,GETDATE()))
+
+
+Create Table Control.Metrics
+(
+MetricID Int identity (1,1),
+PackageID Int,
+OLTPCount int,
+StageCount Int,
+PreCount Int,
+CurrentCount Int,
+Type1Count Int,
+Type2Count Int,
+PostCount Int,
+RunDate DateTime,
+Constraint ControlMetrics_PK Primary Key (MetricID),
+Constraint Metrics_Package_FK Foreign Key (PackageID) References Control.Package (PackageID)
+)
+
+Use [Grocery Control]
+
+CREATE TABLE Control.NoMatchOutput
+(
+ID Int Identity (1,1),
+PackageID Int,
+TableName Nvarchar (50),
+ColumnName  Nvarchar (50),
+TableID  Nvarchar (50)
+Constraint NoMatchOutput_pk PRIMARY KEY (ID)
+Constraint NoMatchOutput_Package_fk FOREIGN KEY (PackageID) REFERENCES Control.Package(PackageID)
+)
+
+/*
+UPDATE [Control].[Package] SET PackageName = 'Fact_HR_Analysis.dtsx' , ENDDATE = NULL WHERE PackageID = 24
+--DELETE PACKAGE IDs 25 AND 26 */
+
+
+select * from [Control].[Package]
+select * from  [Control].[Metrics]
+select * from [Control].[PackageProject]
+select * from [Control].[PackageCategory]
+
+----Staging Query to Load Control Package (containing All Packages) for specified date
+select [PackageID], [SequenceID], [PackageName] from [Control].[Package] 
+WHERE ProjectID = 1 and StartDate <= cast(getdate() as date) and (EndDate is Null or EndDate >= cast(getdate() as date))
+Order by SequenceID
+
+
+----EDW Query to Load Control Package (containing All Packages) for specified date
+select [PackageID], [SequenceID], [PackageName] from [Control].[Package] 
+WHERE ProjectID = 2 and StartDate <= cast(getdate() as date) and (EndDate is Null or EndDate >= cast(getdate() as date))
+Order by SequenceID
+
+
+
+--Update Package Run Information
+Declare @PackageID INT = ?
+Update control.Package set LastRun = Getdate() where PackageID = @PackageID
+
+
+select * from [Control].[Package] 
+
